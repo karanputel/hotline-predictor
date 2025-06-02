@@ -1,32 +1,41 @@
 import hashlib
-import asyncio
+import os
+from fastapi import FastAPI, Request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
+    Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters
 )
+from telegram.ext import AIORateLimiter
 
-BOT_TOKEN = "7873773362:AAHSy-N-OujHOB4dNjTuZTzqqgn7A804YAw"  # Replace with your actual bot token
+BOT_TOKEN = "7873773362:AAHSy-N-OujHOB4dNjTuZTzqqgn7A804YAw"
+APP_URL = "https://hotline-predictor.onrender.com"  # 🔁 Replace this with your actual Render URL
+
+app = FastAPI()
+bot_app = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
 
 users_data = {}
 
-# Welcome /start
+@app.post("/")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, bot_app.bot)
+    await bot_app.process_update(update)
+    return "ok"
+
+# Telegram Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     users_data[user_id] = {}
+    await update.message.reply_text(
+        "*🔥 Welcome to Hotline Predictor AI 🔥*\n\n"
+        "*99.0% Accurate AI Predictions*\n\n"
+        "🔑 _Please enter your Server Seed to begin:_",
+        parse_mode="Markdown"
+    )
 
-    welcome_text = """*🔥 Welcome to Hotline Predictor AI 🔥*
-
-*99.0% Accurate AI Predictions*
-
-🔑 _Please enter your Server Seed to begin:_"""
-
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
-
-# Collect Server Seed
 async def collect_seed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if user_id not in users_data:
         users_data[user_id] = {}
 
@@ -37,20 +46,22 @@ async def collect_seed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users_data[user_id]["amount"] = update.message.text.strip()
         await show_prediction(update, context)
 
-# Prediction Logic
 def predict_color(seed: str) -> str:
     hashed = hashlib.sha256(seed.encode()).hexdigest()
     result = int(hashed[-2:], 16)
     return "RED" if result % 2 == 0 else "BLACK"
 
-# Show final result
 async def show_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     seed = users_data[user_id]["seed"]
     amount = users_data[user_id]["amount"]
     result = predict_color(seed)
 
-    image_url = "https://i.ibb.co/nqkF83rg/Screenshot-20250421-083654-Chrome.png" if result == "RED" else "https://i.ibb.co/67w0dd5T/Screenshot-20250421-083726-Chrome.png"
+    image_url = (
+        "https://i.ibb.co/nqkF83rg/Screenshot-20250421-083654-Chrome.png"
+        if result == "RED"
+        else "https://i.ibb.co/67w0dd5T/Screenshot-20250421-083726-Chrome.png"
+    )
 
     final_text = f"""*🎯 Prediction Completed!*
 
@@ -71,18 +82,14 @@ _Result generated with hashed pattern simulation._"""
         reply_markup=keyboard
     )
 
-    # Reset for free user (allow only once)
     del users_data[user_id]
 
-# Retry button logic
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     if query.data == "retry":
         await query.message.reply_text("🔁 _Enter your Server Seed again:_", parse_mode="Markdown")
 
-# Help Command
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         """▶ *Features:*
@@ -93,17 +100,13 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# Main
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CommandHandler("help", help_cmd))
+bot_app.add_handler(CallbackQueryHandler(button_handler))
+bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, collect_seed))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_cmd))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, collect_seed))
+@app.on_event("startup")
+async def on_startup():
+    await bot_app.initialize()
+    await bot_app.bot.set_webhook(url=f"{APP_URL}/")
 
-    print("Hotline Predictor AI Bot running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
