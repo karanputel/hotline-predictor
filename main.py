@@ -8,7 +8,7 @@ from telegram.ext import (
 )
 from telegram.ext import AIORateLimiter
 
-BOT_TOKEN = "7924083659:AAEWGfbSIFE7o27gt5xu4bGtuhYDnaJuHyA"
+BOT_TOKEN = "7757712018:AAEItmy5w6q2QcZtmveGTCs3VkAm-4R4xWk"
 APP_URL = "https://hotline-predictor.onrender.com"  # 🔁 Replace this with your actual Render URL
 
 app = FastAPI()
